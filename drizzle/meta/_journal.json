@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789967509645,
+      "tag": "0000_legal_wong",
+      "breakpoints": true
+    }
+  ]
+}
