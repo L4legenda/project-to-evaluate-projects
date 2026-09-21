@@ -50,6 +50,12 @@ export async function ensureSchema() {
       UNIQUE(presentation_id, voter_name),
       FOREIGN KEY(presentation_id) REFERENCES presentations(id)
     )`),
+    DB.prepare(`CREATE TABLE IF NOT EXISTS upload_sessions (
+      id TEXT PRIMARY KEY, group_id TEXT NOT NULL, upload_id TEXT NOT NULL,
+      object_key TEXT NOT NULL, student_name TEXT NOT NULL, title TEXT NOT NULL,
+      filename TEXT NOT NULL, file_size INTEGER NOT NULL, created_at TEXT NOT NULL,
+      FOREIGN KEY(group_id) REFERENCES groups(id)
+    )`),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_presentations_group ON presentations(group_id)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_votes_presentation ON votes(presentation_id)"),
   ]);
