@@ -1,6 +1,10 @@
+import { isAdminAuthenticated } from "@/app/lib/auth";
 import { bindings, ensureSchema, json, randomToken } from "@/app/lib/store";
 
 export async function POST(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return json({ error: "Требуется вход в админ-панель" }, { status: 401 });
+  }
   await ensureSchema();
   const body = (await request.json()) as { name?: string; projectType?: string };
   const name = body.name?.trim();

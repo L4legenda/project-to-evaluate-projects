@@ -61,5 +61,13 @@ export default function AdminPage() {
 }
 
 function Header() {
-  return <header className="topbar"><Link className="brand" href="/admin"><span className="brand-mark">P</span><span>Pitchroom</span></Link><div className="top-actions"><span className="status-dot" /> Система готова <span className="avatar">АД</span></div></header>;
+  const [leaving, setLeaving] = useState(false);
+
+  async function signOut() {
+    setLeaving(true);
+    try { await fetch("/api/admin/session", { method: "DELETE" }); } catch { /* всё равно уходим на вход */ }
+    window.location.href = "/admin/login";
+  }
+
+  return <header className="topbar"><Link className="brand" href="/admin"><span className="brand-mark">P</span><span>Pitchroom</span></Link><div className="top-actions"><span className="status-dot" /> Система готова <span className="avatar">АД</span><button className="sign-out" onClick={() => void signOut()} disabled={leaving}>Выйти</button></div></header>;
 }
