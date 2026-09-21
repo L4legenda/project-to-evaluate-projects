@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { copyText } from "@/app/lib/clipboard";
 
 type SavedGroup = { code: string; adminKey: string; name: string; projectType: string };
 
@@ -48,7 +49,7 @@ export default function AdminPage() {
         {groups.map((group, index) => <article className={`session-card ${index === 0 ? "featured" : ""}`} key={group.code}>
           <div className="card-top"><span className={index === 0 ? "live" : "scheduled"}>{index === 0 && <i />} {index === 0 ? "ПОСЛЕДНЯЯ" : "СЕССИЯ"}</span><span className="session-code">{group.code}</span></div>
           <h3>{group.name}</h3><p>{group.projectType === "game" ? "Проекты видеоигр" : "Бизнес-идеи"}</p>
-          <div className="share-preview"><span>/g/{group.code}</span><button onClick={() => navigator.clipboard.writeText(`${location.origin}/g/${group.code}`)}>Копировать</button></div>
+          <div className="share-preview"><span>/g/{group.code}</span><button onClick={() => void copyText(`${location.origin}/g/${group.code}`)}>Копировать</button></div>
           <div className="card-bottom"><span className="muted-caption">Создана вами</span><a className="enter" href={`/admin/${group.code}?key=${group.adminKey}`}>Открыть сессию <b>→</b></a></div>
         </article>)}
         <button className="new-card" onClick={() => setCreating(true)}><span>＋</span><b>Создать новую сессию</b><small>Ссылка для студентов появится сразу</small></button>

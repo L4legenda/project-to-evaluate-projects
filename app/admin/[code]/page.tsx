@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { copyText } from "@/app/lib/clipboard";
 
 type Presentation = { id:string; student_name:string; title:string; filename:string; vote_count:number; score:number|null; idea_score:number|null; execution_score:number|null; delivery_score:number|null; potential_score:number|null };
 type Session = { group:{ code:string; name:string; project_type:string; phase:string; active_presentation_id:string|null; current_page:number }; presentations:Presentation[] };
@@ -25,7 +26,12 @@ export default function AdminSession({ params }: { params: Promise<{ code:string
     const res = await fetch(`/api/groups/${code}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ adminKey:key, phase, presentationId, page }) });
     if (!res.ok) { const r=await res.json() as {error?:string}; setError(r.error || "Не удалось изменить режим"); return; } await load();
   }
-  function copyLink() { navigator.clipboard.writeText(`${location.origin}/g/${code}`); setCopied(true); setTimeout(()=>setCopied(false),1600); }
+  async function copyLink() {
+    const success = await copyText(`${location.origin}/g/${code}`);
+    if (!success) { setError("Не удалось скопировать ссылку. Выделите её вручную."); return; }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
 
   if (error && !data) return <main className="center-state"><b>{error}</b><Link href="/admin">Вернуться в панель</Link></main>;
   if (!data) return <main className="center-state"><span className="loader"/><b>Загружаем сессию…</b></main>;
