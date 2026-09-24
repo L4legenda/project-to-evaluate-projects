@@ -12,6 +12,9 @@ type Props = {
   onPageCount?: (count: number) => void;
 };
 
+/** Сколько ждём открытия документа, прежде чем вернуться к показу через iframe. */
+const LOAD_TIMEOUT_MS = 20000;
+
 /**
  * Показ PDF постранично.
  *
@@ -40,25 +43,38 @@ export default function PdfCanvas({ fileId, page, onPageCount }: Props) {
   // 1. Загружаем документ один раз на файл.
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>|null = null;
     (async () => {
+      const pdfjs = await import("pdfjs-dist");
+      // Воркер берём из public/ (его копирует scripts/copy-pdf-worker.mjs).
+      // Из node_modules подключать нельзя: в dev-режиме Vite обрабатывает
+      // такой файл как обычный модуль, подмешивает в него свой клиент, и
+      // внутри воркера всё падает на `window is not defined`.
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      const task = pdfjs.getDocument({ url: `/api/files/${fileId}`, isEvalSupported: false });
       try {
-        const pdfjs = await import("pdfjs-dist");
-        // Воркер берём из public/ (его копирует scripts/copy-pdf-worker.mjs).
-        // Из node_modules подключать нельзя: в dev-режиме Vite обрабатывает
-        // такой файл как обычный модуль, подмешивает в него свой клиент, и
-        // внутри воркера всё падает на `window is not defined`.
-        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        const doc = await pdfjs.getDocument({ url: `/api/files/${fileId}`, isEvalSupported: false }).promise;
+        const doc = await Promise.race([
+          task.promise,
+          new Promise<never>((_, reject) => {
+            // Если документ не открылся за это время, показываем слайды
+            // прежним способом — лучше медленнее, чем пустой экран на защите.
+            timer = setTimeout(() => reject(new Error("PDF не открылся вовремя")), LOAD_TIMEOUT_MS);
+          }),
+        ]);
+        if (timer) { clearTimeout(timer); timer = null; }
         if (cancelled) { void doc.destroy(); return; }
         docRef.current = doc;
         countRef.current?.(doc.numPages);
         setReady(true);
       } catch {
+        if (timer) { clearTimeout(timer); timer = null; }
+        void task.destroy();
         if (!cancelled) setFailed(true);
       }
     })();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
       const doc = docRef.current;
       docRef.current = null;
       if (doc) void doc.destroy();
