@@ -29,12 +29,21 @@ ADMIN_SESSION_SECRET=случайная-строка
 
 ## Работа на сервере
 
-Приложение опубликовано на сервере `130.49.178.118` и доступно по адресу:
+Подробная инструкция по развёртыванию на любом сервере — в
+[`deploy/README.md`](deploy/README.md). Там же готовые конфиги для Apache и nginx,
+запуск как фоновой задачи (systemd / pm2 / tmux), HTTPS, обновление и резервные копии.
 
-- админ-панель — `http://130.49.178.118/admin` (вход `admin` / `admin`);
-- ссылка для студентов — `http://130.49.178.118/g/<код группы>`.
+Короткий путь на чистом сервере (Ubuntu/Debian):
 
-На сервере всё работает под systemd-службой `pitchroom`:
+```bash
+cd /opt/pitchroom
+sudo ./deploy/install.sh
+```
+
+Скрипт поставит Node.js 22, соберёт проект, создаст `/etc/pitchroom.env`,
+запустит systemd-службу `pitchroom` и проверит, что страница входа отвечает.
+
+Управление службой:
 
 ```bash
 systemctl status pitchroom          # состояние
@@ -48,14 +57,23 @@ systemctl restart pitchroom         # перезапуск
 
 ### Обновление приложения
 
-Из папки проекта на компьютере:
+Из папки проекта на компьютере (сборка локально и заливка на сервер):
 
 ```bash
-PITCHROOM_SSH_PASSWORD='пароль root' ./deploy/deploy.sh
+PITCHROOM_SSH_PASSWORD='пароль root' PITCHROOM_HOST=адрес-сервера ./deploy/deploy.sh
 ```
 
 Скрипт собирает production-версию, загружает её на сервер, обновляет
 systemd-службу и проверяет, что страница входа отвечает. Данные при этом не трогаются.
+
+## Чего делать не нужно
+
+- **Не запускайте `vinext start` / `next start` как production.** Node-сервер
+  не даёт приложению биндинги D1/R2, и запросы к базе падают с 500.
+  Production — это `wrangler dev` по собранному `dist/` (см. `deploy/start.sh`).
+- **Не ставьте за прокси dev-сервер (`npm run dev` / `npm run lan`).**
+  Apache и nginx пробрасывают заголовок `Upgrade`, а dev-сервер на нём падает
+  целиком (вплоть до 502/503 до ручного перезапуска).
 
 ## Локальный запуск
 
@@ -88,5 +106,7 @@ npm run lan
 
 - `app/` — страницы и API (App Router);
 - `app/lib/auth.ts` — вход в админ-панель и cookie сессии;
-- `deploy/` — файлы публикации на сервер: `deploy.sh`, `start.sh`, `pitchroom.service`;
+- `deploy/` — развёртывание: `README.md` (инструкция), `install.sh`, `uninstall.sh`,
+  `deploy.sh`, `start.sh`, `pitchroom.service`, `apache-pitchroom.conf`,
+  `nginx-pitchroom.conf`, `pitchroom.env.example`;
 - `db/schema.ts` — схема базы D1.

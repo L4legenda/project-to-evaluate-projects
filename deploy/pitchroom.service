@@ -1,19 +1,34 @@
 [Unit]
 Description=Pitchroom — защита и оценка презентаций
+Documentation=file:///opt/pitchroom/deploy/README.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
+
+# Каталог приложения и файл с логином/паролем админ-панели.
+# Если ставите в другое место — поменяйте пути здесь и в start.sh.
 WorkingDirectory=/opt/pitchroom
 EnvironmentFile=-/etc/pitchroom.env
 ExecStart=/opt/pitchroom/start.sh
+
+# Node, установленный скриптом установки, лежит в /opt/node22 и продублирован
+# в /usr/local/bin — PATH нужен, чтобы служба нашла node и npm.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/node22/bin
+
+# Перезапуск при падении и при перезагрузке сервера (см. WantedBy ниже).
 Restart=always
 RestartSec=5
-LimitNOFILE=65535
+
+# Логи в journalctl -u pitchroom
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pitchroom
+
+LimitNOFILE=65535
+TimeoutStopSec=20
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
