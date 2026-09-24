@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { copyText } from "@/app/lib/clipboard";
+import PdfCanvas from "@/app/components/PdfCanvas";
 import { fullscreenElement, onFullscreenChange, toggleFullscreen } from "@/app/lib/fullscreen";
 import { createSlideStepper, type SlideStepper } from "@/app/lib/slide-nav";
 
@@ -58,18 +59,26 @@ export default function AdminSession({ params }: { params: Promise<{ code:string
 function PresenterView({active,page,onPage,onFinish}:{active:Presentation;page:number;onPage:(p:number)=>void;onFinish:()=>void}) {
   const stageRef = useRef<HTMLElement|null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [total, setTotal] = useState(0);
+  const totalRef = useRef(0);
   const onPageRef = useRef(onPage);
   const stepper = useRef<SlideStepper|null>(null);
 
   useEffect(() => { onPageRef.current = onPage; }, [onPage]);
   // Кликер нажимает быстрее, чем отвечает сервер: нажатия выстраиваются
   // в очередь (см. app/lib/slide-nav.ts).
-  stepper.current ??= createSlideStepper(page, (value) => onPageRef.current(value));
+  stepper.current ??= createSlideStepper(page, (value) => Promise.resolve(onPageRef.current(value)));
   // Пока наша отправка в полёте, цель не перетираем.
   useEffect(() => { stepper.current?.sync(page); }, [page]);
   useEffect(() => onFullscreenChange(() => setFullscreen(Boolean(fullscreenElement()))), []);
 
-  const step = useCallback((delta: number) => { stepper.current?.step(delta); }, []);
+  const handlePageCount = useCallback((count: number) => { totalRef.current = count; setTotal(count); }, []);
+
+  const step = useCallback((delta: number) => {
+    // На последнем слайде дальше не уходим — иначе показывалась бы пустая страница.
+    if (delta > 0 && totalRef.current > 0 && (stepper.current?.current() ?? 1) >= totalRef.current) return;
+    stepper.current?.step(delta);
+  }, []);
 
   const toggleFull = useCallback(() => { void toggleFullscreen(stageRef.current); }, []);
 
@@ -95,8 +104,8 @@ function PresenterView({active,page,onPage,onFinish}:{active:Presentation;page:n
 
   return <section className="stage" ref={stageRef}>
     <div className="stage-bar"><div><span className="live"><i/> ПРЯМОЙ ЭФИР</span><b>{active.title}</b><small>{active.student_name}</small></div><div className="stage-actions"><button className="ghost-button" onClick={toggleFull}>{fullscreen ? "⤡ Выйти" : "⛶ Полный экран"}</button><button className="danger-button" onClick={onFinish}>Завершить показ</button></div></div>
-    <div className="pdf-stage"><iframe key={`${active.id}-${page}`} title={active.title} allow="fullscreen" tabIndex={-1} src={`/api/files/${active.id}#page=${page}&view=Fit&toolbar=0&navpanes=0`} /><button type="button" className="slide-zone" onClick={()=>step(1)} aria-label="Следующий слайд"><span className="slide-hint">Клик — следующий слайд</span></button></div>
-    <div className="stage-controls"><button disabled={page<=1} onClick={()=>step(-1)} aria-label="Предыдущий слайд">←</button><span>Слайд <b>{page}</b></span><button onClick={()=>step(1)} aria-label="Следующий слайд">→</button><small>Кликер: ← → Page Up/Down · F — полный экран</small></div>
+    <div className="pdf-stage"><PdfCanvas key={active.id} fileId={active.id} page={page} onPageCount={handlePageCount}/><button type="button" className="slide-zone" onClick={()=>step(1)} aria-label="Следующий слайд"><span className="slide-hint">Клик — следующий слайд</span></button></div>
+    <div className="stage-controls"><button disabled={page<=1} onClick={()=>step(-1)} aria-label="Предыдущий слайд">←</button><span>Слайд <b>{page}</b>{total>0&&<> из {total}</>}</span><button disabled={total>0&&page>=total} onClick={()=>step(1)} aria-label="Следующий слайд">→</button><small>Кликер: ← → Page Up/Down · F — полный экран</small></div>
   </section>;
 }
 

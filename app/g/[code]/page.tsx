@@ -2,6 +2,7 @@
 
 import { FormEvent, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fullscreenElement, onFullscreenChange, toggleFullscreen } from "@/app/lib/fullscreen";
+import PdfCanvas from "@/app/components/PdfCanvas";
 
 type Presentation = { id:string; student_name:string; title:string; filename:string; vote_count:number; score:number|null; idea_score:number|null; execution_score:number|null; delivery_score:number|null; potential_score:number|null };
 type Session = { group:{ code:string; name:string; project_type:string; phase:string; active_presentation_id:string|null; current_page:number }; presentations:Presentation[] };
@@ -68,10 +69,11 @@ async function readJson(response:Response):Promise<unknown>{
 function StudentPresentation({active,page}:{active:Presentation;page:number}){
   const stageRef=useRef<HTMLElement|null>(null);
   const [fullscreen,setFullscreen]=useState(false);
+  const [total,setTotal]=useState(0);
   useEffect(()=>onFullscreenChange(()=>setFullscreen(Boolean(fullscreenElement()))),[]);
   return <main className="student-stage" ref={stageRef}>
-    <header><span className="live"><i/> ПРЯМОЙ ЭФИР</span><div><b>{active.title}</b><small>{active.student_name}</small></div><div className="student-stage-actions"><span className="follow">Слайд {page}</span><button className="ghost-button" onClick={()=>void toggleFullscreen(stageRef.current)}>{fullscreen?"⤡ Выйти":"⛶ Полный экран"}</button></div></header>
-    <iframe key={`${active.id}-${page}`} title={active.title} allow="fullscreen" tabIndex={-1} src={`/api/files/${active.id}#page=${page}&view=Fit&toolbar=0&navpanes=0`}/>
+    <header><span className="live"><i/> ПРЯМОЙ ЭФИР</span><div><b>{active.title}</b><small>{active.student_name}</small></div><div className="student-stage-actions"><span className="follow">Слайд {page}{total>0?` из ${total}`:""}</span><button className="ghost-button" onClick={()=>void toggleFullscreen(stageRef.current)}>{fullscreen?"⤡ Выйти":"⛶ Полный экран"}</button></div></header>
+    <PdfCanvas key={active.id} fileId={active.id} page={page} onPageCount={setTotal}/>
     <footer>Управляет преподаватель · слайды переключаются автоматически</footer>
   </main>;
 }
