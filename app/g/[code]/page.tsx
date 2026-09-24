@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, use, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fullscreenElement, onFullscreenChange, toggleFullscreen } from "@/app/lib/fullscreen";
 
 type Presentation = { id:string; student_name:string; title:string; filename:string; vote_count:number; score:number|null; idea_score:number|null; execution_score:number|null; delivery_score:number|null; potential_score:number|null };
 type Session = { group:{ code:string; name:string; project_type:string; phase:string; active_presentation_id:string|null; current_page:number }; presentations:Presentation[] };
@@ -64,7 +65,16 @@ async function readJson(response:Response):Promise<unknown>{
   try{return JSON.parse(text);}catch{return {error:response.status===413?"Файл слишком большой для сервера":text||`Ошибка ${response.status}`};}
 }
 
-function StudentPresentation({active,page}:{active:Presentation;page:number}){return <main className="student-stage"><header><span className="live"><i/> ПРЯМОЙ ЭФИР</span><div><b>{active.title}</b><small>{active.student_name}</small></div><span className="follow">Слайд {page}</span></header><iframe key={`${active.id}-${page}`} title={active.title} src={`/api/files/${active.id}#page=${page}&view=FitH&toolbar=0&navpanes=0`}/><footer>Управляет преподаватель · слайды переключаются автоматически</footer></main>}
+function StudentPresentation({active,page}:{active:Presentation;page:number}){
+  const stageRef=useRef<HTMLElement|null>(null);
+  const [fullscreen,setFullscreen]=useState(false);
+  useEffect(()=>onFullscreenChange(()=>setFullscreen(Boolean(fullscreenElement()))),[]);
+  return <main className="student-stage" ref={stageRef}>
+    <header><span className="live"><i/> ПРЯМОЙ ЭФИР</span><div><b>{active.title}</b><small>{active.student_name}</small></div><div className="student-stage-actions"><span className="follow">Слайд {page}</span><button className="ghost-button" onClick={()=>void toggleFullscreen(stageRef.current)}>{fullscreen?"⤡ Выйти":"⛶ Полный экран"}</button></div></header>
+    <iframe key={`${active.id}-${page}`} title={active.title} allow="fullscreen" tabIndex={-1} src={`/api/files/${active.id}#page=${page}&view=Fit&toolbar=0&navpanes=0`}/>
+    <footer>Управляет преподаватель · слайды переключаются автоматически</footer>
+  </main>;
+}
 
 function Voting({active,name,code}:{active:Presentation;name:string;code:string}){const[voted,setVoted]=useState(()=>typeof localStorage!=="undefined"&&localStorage.getItem(`vote-${active.id}`)==="yes");const[busy,setBusy]=useState(false);const[error,setError]=useState("");async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);const body={presentationId:active.id,voterName:name,idea:Number(f.get("idea")),execution:Number(f.get("execution")),delivery:Number(f.get("delivery")),potential:Number(f.get("potential")),comment:f.get("comment")};const r=await fetch(`/api/groups/${code}/votes`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const j=await r.json() as {error?:string};setBusy(false);if(!r.ok){setError(j.error||"Не удалось отправить");return;}localStorage.setItem(`vote-${active.id}`,"yes");setVoted(true);}if(voted)return <main className="student-page"><div className="student-card center-card"><span className="success-big">✓</span><h1>Оценка принята</h1><p>Спасибо! Результаты появятся, когда преподаватель завершит голосование.</p><span className="waiting-note"><i/> Ожидаем результаты</span></div></main>;const criteria=[['idea','Идея','Насколько идея интересна и понятна?'],['execution','Реализация','Реалистично ли её воплотить?'],['delivery','Презентация','Насколько убедительной была подача?'],['potential','Потенциал','Есть ли у проекта перспективы?']];return <main className="student-page"><form className="student-card voting-card" onSubmit={submit}><p className="eyebrow">Оцените проект</p><h1>{active.title}</h1><p>{active.student_name}</p><div className="criteria">{criteria.map(([key,label,hint])=><fieldset key={key}><legend><b>{label}</b><small>{hint}</small></legend><div className="rating">{[1,2,3,4,5,6,7,8,9,10].map(n=><label key={n}><input type="radio" name={key} value={n} required/><span>{n}</span></label>)}</div></fieldset>)}</div><label>Комментарий <small>(необязательно)</small><textarea name="comment" placeholder="Что особенно удалось? Что можно улучшить?"/></label>{error&&<p className="form-error">{error}</p>}<button disabled={busy} className="primary full">{busy?"Отправляем…":"Отправить оценку"}</button></form></main>}
 

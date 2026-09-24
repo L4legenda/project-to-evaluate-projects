@@ -1,8 +1,10 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { copyText } from "@/app/lib/clipboard";
+import { fullscreenElement, onFullscreenChange, toggleFullscreen } from "@/app/lib/fullscreen";
+import { createSlideStepper, type SlideStepper } from "@/app/lib/slide-nav";
 
 type Presentation = { id:string; student_name:string; title:string; filename:string; vote_count:number; score:number|null; idea_score:number|null; execution_score:number|null; delivery_score:number|null; potential_score:number|null };
 type Session = { group:{ code:string; name:string; project_type:string; phase:string; active_presentation_id:string|null; current_page:number }; presentations:Presentation[] };
@@ -54,7 +56,48 @@ export default function AdminSession({ params }: { params: Promise<{ code:string
 }
 
 function PresenterView({active,page,onPage,onFinish}:{active:Presentation;page:number;onPage:(p:number)=>void;onFinish:()=>void}) {
-  return <section className="stage"><div className="stage-bar"><div><span className="live"><i/> ПРЯМОЙ ЭФИР</span><b>{active.title}</b><small>{active.student_name}</small></div><button className="danger-button" onClick={onFinish}>Завершить показ</button></div><div className="pdf-stage"><iframe key={`${active.id}-${page}`} title={active.title} src={`/api/files/${active.id}#page=${page}&view=FitH&toolbar=0&navpanes=0`} /></div><div className="stage-controls"><button disabled={page<=1} onClick={()=>onPage(page-1)}>←</button><span>Слайд <b>{page}</b></span><button onClick={()=>onPage(page+1)}>→</button><small>Слайд меняется у всех участников</small></div></section>;
+  const stageRef = useRef<HTMLElement|null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const onPageRef = useRef(onPage);
+  const stepper = useRef<SlideStepper|null>(null);
+
+  useEffect(() => { onPageRef.current = onPage; }, [onPage]);
+  // Кликер нажимает быстрее, чем отвечает сервер: нажатия выстраиваются
+  // в очередь (см. app/lib/slide-nav.ts).
+  stepper.current ??= createSlideStepper(page, (value) => onPageRef.current(value));
+  // Пока наша отправка в полёте, цель не перетираем.
+  useEffect(() => { stepper.current?.sync(page); }, [page]);
+  useEffect(() => onFullscreenChange(() => setFullscreen(Boolean(fullscreenElement()))), []);
+
+  const step = useCallback((delta: number) => { stepper.current?.step(delta); }, []);
+
+  const toggleFull = useCallback(() => { void toggleFullscreen(stageRef.current); }, []);
+
+  // Кликер присылает либо Page Up/Down, либо стрелки, иногда Enter/пробел.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      switch (event.key) {
+        case "PageDown": case "ArrowRight": case "ArrowDown": case "Enter": case " ": case "Spacebar": case "n": case "N":
+          event.preventDefault(); step(1); break;
+        case "PageUp": case "ArrowLeft": case "ArrowUp": case "Backspace": case "p": case "P":
+          event.preventDefault(); step(-1); break;
+        case "f": case "F": case "F5":
+          event.preventDefault(); toggleFull(); break;
+        default: break;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [step, toggleFull]);
+
+  return <section className="stage" ref={stageRef}>
+    <div className="stage-bar"><div><span className="live"><i/> ПРЯМОЙ ЭФИР</span><b>{active.title}</b><small>{active.student_name}</small></div><div className="stage-actions"><button className="ghost-button" onClick={toggleFull}>{fullscreen ? "⤡ Выйти" : "⛶ Полный экран"}</button><button className="danger-button" onClick={onFinish}>Завершить показ</button></div></div>
+    <div className="pdf-stage"><iframe key={`${active.id}-${page}`} title={active.title} allow="fullscreen" tabIndex={-1} src={`/api/files/${active.id}#page=${page}&view=Fit&toolbar=0&navpanes=0`} /><button type="button" className="slide-zone" onClick={()=>step(1)} aria-label="Следующий слайд"><span className="slide-hint">Клик — следующий слайд</span></button></div>
+    <div className="stage-controls"><button disabled={page<=1} onClick={()=>step(-1)} aria-label="Предыдущий слайд">←</button><span>Слайд <b>{page}</b></span><button onClick={()=>step(1)} aria-label="Следующий слайд">→</button><small>Кликер: ← → Page Up/Down · F — полный экран</small></div>
+  </section>;
 }
 
 function AdminVoting({active,onResults}:{active:Presentation;onResults:()=>void}) { return <section className="mode-screen"><span className="mode-icon">★</span><p className="eyebrow">Оценивание открыто</p><h1>{active.title}</h1><p>Студенты оценивают идею, реализацию, подачу и потенциал проекта.</p><div className="vote-counter"><b>{active.vote_count || 0}</b><span>оценок получено</span></div><button className="primary wide" onClick={onResults}>Показать результаты</button></section>; }
