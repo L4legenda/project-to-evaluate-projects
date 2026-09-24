@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Копия воркера PDF.js из node_modules (scripts/copy-pdf-worker.mjs).
+    "public/pdf.worker.min.mjs",
   ]),
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

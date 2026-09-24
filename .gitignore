@@ -39,3 +39,6 @@ yarn-error.log*
 /outputs/
 /work/
 *.tsbuildinfo
+
+# воркер PDF.js копируется из node_modules (scripts/copy-pdf-worker.mjs)
+/public/pdf.worker.min.mjs

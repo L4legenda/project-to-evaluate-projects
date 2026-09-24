@@ -43,8 +43,11 @@ export default function PdfCanvas({ fileId, page, onPageCount }: Props) {
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
-        const workerSrc = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
-        pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+        // Воркер берём из public/ (его копирует scripts/copy-pdf-worker.mjs).
+        // Из node_modules подключать нельзя: в dev-режиме Vite обрабатывает
+        // такой файл как обычный модуль, подмешивает в него свой клиент, и
+        // внутри воркера всё падает на `window is not defined`.
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         const doc = await pdfjs.getDocument({ url: `/api/files/${fileId}`, isEvalSupported: false }).promise;
         if (cancelled) { void doc.destroy(); return; }
         docRef.current = doc;
