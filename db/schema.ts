@@ -8,6 +8,9 @@ export const groups = sqliteTable("groups", {
 });
 export const presentations = sqliteTable("presentations", {
   id: text("id").primaryKey(), groupId: text("group_id").notNull(), studentName: text("student_name").notNull(),
+  // Авторы работы через запятую: у команд их несколько. Пусто — значит автор один,
+  // и им считается studentName (загрузивший).
+  authors: text("authors"),
   title: text("title").notNull(), filename: text("filename").notNull(), objectKey: text("object_key").notNull(), createdAt: text("created_at").notNull(),
 });
 export const votes = sqliteTable("votes", {
@@ -17,6 +20,6 @@ export const votes = sqliteTable("votes", {
 
 export const uploadSessions = sqliteTable("upload_sessions", {
   id: text("id").primaryKey(), groupId: text("group_id").notNull(), uploadId: text("upload_id").notNull(),
-  objectKey: text("object_key").notNull(), studentName: text("student_name").notNull(), title: text("title").notNull(),
-  filename: text("filename").notNull(), fileSize: integer("file_size").notNull(), createdAt: text("created_at").notNull(),
+  objectKey: text("object_key").notNull(), studentName: text("student_name").notNull(), authors: text("authors"),
+  title: text("title").notNull(), filename: text("filename").notNull(), fileSize: integer("file_size").notNull(), createdAt: text("created_at").notNull(),
 });

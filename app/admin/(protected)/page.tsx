@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [removing, setRemoving] = useState<SavedGroup | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -32,6 +33,26 @@ export default function AdminPage() {
     window.location.href = `/admin/${result.code}?key=${result.adminKey}`;
   }
 
+  /**
+   * Удаление сессии: на сервере вместе с ней пропадают презентации, оценки и
+   * PDF, а в браузере — карточка из списка сессий.
+   */
+  async function removeGroup(group: SavedGroup) {
+    setBusy(true); setError("");
+    const response = await fetch(`/api/groups/${group.code}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adminKey: group.adminKey }) });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      setError(result.error || "Не удалось удалить сессию");
+      setBusy(false);
+      return;
+    }
+    const next = groups.filter((item) => item.code !== group.code);
+    localStorage.setItem("pitchroom-admin-groups", JSON.stringify(next));
+    setGroups(next);
+    setRemoving(null);
+    setBusy(false);
+  }
+
   return (
     <main className="shell">
       <Header />
@@ -50,12 +71,13 @@ export default function AdminPage() {
           <div className="card-top"><span className={index === 0 ? "live" : "scheduled"}>{index === 0 && <i />} {index === 0 ? "ПОСЛЕДНЯЯ" : "СЕССИЯ"}</span><span className="session-code">{group.code}</span></div>
           <h3>{group.name}</h3><p>{group.projectType === "game" ? "Проекты видеоигр" : "Бизнес-идеи"}</p>
           <div className="share-preview"><span>/g/{group.code}</span><button onClick={() => void copyText(`${location.origin}/g/${group.code}`)}>Копировать</button></div>
-          <div className="card-bottom"><span className="muted-caption">Создана вами</span><a className="enter" href={`/admin/${group.code}?key=${group.adminKey}`}>Открыть сессию <b>→</b></a></div>
+          <div className="card-bottom"><button className="link-danger" onClick={() => setRemoving(group)}>Удалить</button><a className="enter" href={`/admin/${group.code}?key=${group.adminKey}`}>Открыть сессию <b>→</b></a></div>
         </article>)}
         <button className="new-card" onClick={() => setCreating(true)}><span>＋</span><b>Создать новую сессию</b><small>Ссылка для студентов появится сразу</small></button>
       </section>
       {!groups.length && <div className="empty-note"><b>Сессий пока нет</b><span>Начните с кнопки «Новая сессия» — это займёт меньше минуты.</span></div>}
       {creating && <dialog open className="modal-backdrop"><form className="modal" onSubmit={createGroup}><button type="button" className="modal-close" onClick={() => setCreating(false)}>×</button><p className="eyebrow">Новая сессия</p><h2>Создайте пространство группы</h2><label>Название сессии<input name="name" required placeholder="Например, Бизнес-идеи · ИТ-21" /></label><label>Тематика<select name="projectType"><option value="business">Бизнес-идеи</option><option value="game">Видеоигры</option></select></label>{error && <p className="form-error">{error}</p>}<button disabled={busy} className="primary full">{busy ? "Создаём…" : "Создать и получить ссылку"}</button></form></dialog>}
+      {removing && <dialog open className="modal-backdrop"><div className="modal confirm-modal"><button type="button" className="modal-close" onClick={() => setRemoving(null)}>×</button><p className="eyebrow">Удаление сессии</p><h2>Удалить «{removing.name}»?</h2><p className="modal-text">Вместе с сессией удалятся все загруженные PDF, презентации и оценки. Ссылка <b>/g/{removing.code}</b> перестанет открываться — вернуть данные будет нельзя.</p>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="ghost-plain" onClick={() => setRemoving(null)} disabled={busy}>Отмена</button><button type="button" className="primary danger" onClick={() => void removeGroup(removing)} disabled={busy}>{busy ? "Удаляем…" : "Удалить сессию"}</button></div></div></dialog>}
     </main>
   );
 }

@@ -1,9 +1,10 @@
+import { normalizeAuthors } from "@/app/lib/authors";
 import { bindings, ensureSchema, json } from "@/app/lib/store";
 
 type Context = { params: Promise<{ code: string }> };
 type UploadSession = {
   id: string; group_id: string; upload_id: string; object_key: string;
-  student_name: string; title: string; filename: string; file_size: number;
+  student_name: string; authors: string | null; title: string; filename: string; file_size: number;
 };
 const CHUNK_SIZE = 6 * 1024 * 1024;
 
@@ -16,13 +17,15 @@ async function findSession(code: string, id: string) {
 export async function POST(request: Request, context: Context) {
   await ensureSchema();
   const { code } = await context.params;
-  const body = (await request.json()) as { studentName?: string; title?: string; filename?: string; size?: number; type?: string };
+  const body = (await request.json()) as { studentName?: string; authors?: unknown; title?: string; filename?: string; size?: number; type?: string };
   const studentName = body.studentName?.trim();
   const filename = body.filename?.trim();
   const size = Number(body.size || 0);
   if (!studentName || !filename) return json({ error: "Укажите ФИО и выберите PDF" }, { status: 400 });
   if (body.type !== "application/pdf" && !filename.toLowerCase().endsWith(".pdf")) return json({ error: "Можно загрузить только PDF" }, { status: 400 });
   if (!Number.isFinite(size) || size <= 0 || size > 30 * 1024 * 1024) return json({ error: "Файл должен быть не больше 30 МБ" }, { status: 400 });
+  // Соавторов может не быть — тогда работу подписываем именем загрузившего.
+  const authors = normalizeAuthors(body.authors, studentName);
   const { DB, FILES } = bindings();
   const group = await DB.prepare("SELECT id FROM groups WHERE code = ?").bind(code.toUpperCase()).first<{ id: string }>();
   if (!group) return json({ error: "Группа не найдена" }, { status: 404 });
@@ -30,9 +33,9 @@ export async function POST(request: Request, context: Context) {
   const objectKey = `${group.id}/${id}.pdf`;
   const upload = await FILES.createMultipartUpload(objectKey, { httpMetadata: { contentType: "application/pdf" } });
   await DB.prepare(`INSERT INTO upload_sessions
-    (id, group_id, upload_id, object_key, student_name, title, filename, file_size, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, group.id, upload.uploadId, objectKey, studentName, body.title?.trim() || filename.replace(/\.pdf$/i, ""), filename, size, new Date().toISOString()).run();
+    (id, group_id, upload_id, object_key, student_name, authors, title, filename, file_size, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, group.id, upload.uploadId, objectKey, studentName, authors, body.title?.trim() || filename.replace(/\.pdf$/i, ""), filename, size, new Date().toISOString()).run();
   return json({ id });
 }
 
@@ -66,8 +69,8 @@ export async function PATCH(request: Request, context: Context) {
   const upload = FILES.resumeMultipartUpload(session.object_key, session.upload_id);
   await upload.complete(body.parts);
   await DB.batch([
-    DB.prepare(`INSERT INTO presentations (id, group_id, student_name, title, filename, object_key, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(session.id, session.group_id, session.student_name, session.title, session.filename, session.object_key, new Date().toISOString()),
+    DB.prepare(`INSERT INTO presentations (id, group_id, student_name, authors, title, filename, object_key, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(session.id, session.group_id, session.student_name, session.authors, session.title, session.filename, session.object_key, new Date().toISOString()),
     DB.prepare("DELETE FROM upload_sessions WHERE id = ?").bind(session.id),
   ]);
   return json({ ok: true, id: session.id });
